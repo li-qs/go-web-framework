@@ -44,10 +44,11 @@ func main() {
 		logger.Logger.Fatal("load config failed", zap.Error(err))
 	}
 
-	db, err := mysql.InitDB(cfg.Database.Main)
+	db, err := mysql.Connect(cfg.Database.Main)
 	if err != nil {
 		logger.Logger.Fatal("init mysql failed", zap.Error(err))
 	}
+	defer db.Close()
 
 	e := echo.New()
 	e.Validator = &Validator{validator: validator.New()}

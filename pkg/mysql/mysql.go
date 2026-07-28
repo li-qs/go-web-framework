@@ -11,7 +11,7 @@ type DB struct {
 	*sqlx.DB
 }
 
-func InitDB(dsn string) (*DB, error) {
+func Connect(dsn string) (*DB, error) {
 	db, err := sqlx.Connect("mysql", dsn)
 	if err != nil {
 		return nil, err
