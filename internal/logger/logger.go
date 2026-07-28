@@ -27,7 +27,7 @@ func Middleware() echo.MiddlewareFunc {
 		LogStatus: true,
 		LogValuesFunc: func(c *echo.Context, v middleware.RequestLoggerValues) error {
 			Logger.Info("request",
-				zap.String("URI", v.URI),
+				zap.String("uri", v.URI),
 				zap.Int("status", v.Status),
 			)
 			return nil
