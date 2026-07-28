@@ -2,17 +2,17 @@ package router
 
 import (
 	"myapi/internal/config"
-	"myapi/internal/db"
 	"myapi/internal/handler"
 	myMiddleware "myapi/internal/middleware"
 	"myapi/internal/repository"
 	"myapi/internal/service"
+	"myapi/pkg/mysql"
 
 	"github.com/labstack/echo/v5"
 )
 
-func Register(e *echo.Echo, cfg *config.Config) {
-	userRepo := &repository.User{DB: db.DB}
+func Register(e *echo.Echo, db *mysql.DB, cfg *config.Config) {
+	userRepo := &repository.User{DB: db}
 
 	loginService := &service.Login{
 		UserRepo:           userRepo,

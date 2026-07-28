@@ -3,9 +3,9 @@ package main
 import (
 	"context"
 	"myapi/internal/config"
-	"myapi/internal/db"
 	"myapi/internal/logger"
 	"myapi/internal/router"
+	"myapi/pkg/mysql"
 	"net/http"
 	"os"
 	"os/signal"
@@ -44,7 +44,8 @@ func main() {
 		logger.Logger.Fatal("load config failed", zap.Error(err))
 	}
 
-	if err := db.InitMySQL(cfg.Database.Main); err != nil {
+	db, err := mysql.InitDB(cfg.Database.Main)
+	if err != nil {
 		logger.Logger.Fatal("init mysql failed", zap.Error(err))
 	}
 
@@ -65,7 +66,7 @@ func main() {
 		return c.String(http.StatusOK, "OK")
 	})
 
-	router.Register(e, cfg)
+	router.Register(e, db, cfg)
 
 	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
 	defer stop()
