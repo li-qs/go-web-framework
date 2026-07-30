@@ -51,5 +51,8 @@ func (h *User) UpdatePassword(c *echo.Context) error {
 	if err != nil {
 		return response.JsonError(c, 500, err.Error())
 	}
+
+	h.LoginService.RevokeAllUserTokens(user.ID)
+
 	return response.JsonData(c, "")
 }

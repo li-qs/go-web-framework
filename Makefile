@@ -1,26 +1,15 @@
-NAME        = api
-BUILD_DIR   = $(CURDIR)/build
-PLATFORMS   = linux-amd64 darwin-amd64 darwin-arm64
+NAME      = myapi
+BUILD_DIR = $(CURDIR)/build
 
-# ./cmd/ 下有什么子目录，添加到这里即可
-BINS = server
-
-.PHONY: all clean $(BINS)
-
-all: clean $(BINS)
+.PHONY: all clean
+all: clean server
 
 clean:
 	rm -rf $(BUILD_DIR)
 
-define build_bin
-$(1): $(addprefix $(1)-, $(PLATFORMS))
+server: server-linux-amd64 server-darwin-amd64 server-darwin-arm64
 
-$(1)-%:
+server-linux-amd64 server-darwin-amd64 server-darwin-arm64:
 	@mkdir -p $(BUILD_DIR)
-	GOOS=$$(word 1, $$(subst -, , $$*)) \
-	GOARCH=$$(word 2, $$(subst -, , $$*)) \
-	CGO_ENABLED=0 \
-	go build -o $(BUILD_DIR)/$(NAME)-$(1)-$$* ./cmd/$(1)
-endef
-
-$(foreach bin,$(BINS),$(eval $(call build_bin, $(bin))))
+	CGO_ENABLED=0 GOOS=$$(echo $@ | sed 's/^server-//;s/-.*//') GOARCH=$$(echo $@ | sed 's/^server-//;s/.*-//') \
+		go build -o $(BUILD_DIR)/$(NAME)-$@ ./cmd/server

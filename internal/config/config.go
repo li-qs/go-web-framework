@@ -23,7 +23,9 @@ type DatabaseConfig struct {
 }
 
 type AuthConfig struct {
-	LoginExpireSeconds int `yaml:"login_expire_seconds"`
+	JWTSecret                string `yaml:"jwt_secret"`
+	AccessTokenExpireSeconds  int    `yaml:"access_token_expire_seconds"`
+	RefreshTokenExpireSeconds int    `yaml:"refresh_token_expire_seconds"`
 }
 
 func Load(path string) (*Config, error) {
@@ -49,14 +51,20 @@ func setDefaults(cfg *Config) {
 	if cfg.Server.ListenAddr == "" {
 		cfg.Server.ListenAddr = ":8080"
 	}
-	if cfg.Auth.LoginExpireSeconds == 0 {
-		cfg.Auth.LoginExpireSeconds = 86400
+	if cfg.Auth.AccessTokenExpireSeconds == 0 {
+		cfg.Auth.AccessTokenExpireSeconds = 900
+	}
+	if cfg.Auth.RefreshTokenExpireSeconds == 0 {
+		cfg.Auth.RefreshTokenExpireSeconds = 604800
 	}
 }
 
 func (c *Config) Validate() error {
 	if c.Database.Main == "" {
 		return fmt.Errorf("database.main is required")
+	}
+	if c.Auth.JWTSecret == "" {
+		return fmt.Errorf("auth.jwt_secret is required")
 	}
 	return nil
 }

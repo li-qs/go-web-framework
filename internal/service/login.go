@@ -4,23 +4,30 @@ import (
 	"crypto/sha256"
 	"encoding/hex"
 	"fmt"
-	"strconv"
-	"strings"
 	"time"
 
 	"myapi/internal/model"
 	"myapi/internal/repository"
 	"myapi/internal/utils"
 
+	"github.com/golang-jwt/jwt/v5"
 	"golang.org/x/crypto/bcrypt"
 )
 
-var algorithm = sha256.New
-var invalidTokenErr = fmt.Errorf("invalid token")
+type jwtClaims struct {
+	jwt.RegisteredClaims
+	UserID   int64  `json:"uid"`
+	Username string `json:"username"`
+}
+
+var errInvalidRefreshToken = fmt.Errorf("invalid refresh token")
 
 type Login struct {
-	UserRepo           *repository.User
-	LoginExpireSeconds int
+	UserRepo                  *repository.User
+	RefreshTokenRepo          *repository.RefreshToken
+	JWTSecret                 string
+	AccessTokenExpireSeconds  int
+	RefreshTokenExpireSeconds int
 }
 
 func (s *Login) AuthUser(username, password string) (*model.User, bool, error) {
@@ -32,58 +39,95 @@ func (s *Login) AuthUser(username, password string) (*model.User, bool, error) {
 	return user, err == nil, nil
 }
 
-func (s *Login) generateTokenHash(user *model.User, ts int64, nonce string) string {
-	str := fmt.Sprintf("%s%s%d%s", user.Username, nonce, ts, user.PasswordHash)
-	b := sha256.Sum256([]byte(str))
-	hash := hex.EncodeToString(b[:])
-	return hash
+func (s *Login) GenerateTokens(user *model.User) (string, string, int, error) {
+	now := time.Now()
+	accessToken, err := s.generateJWT(user, now)
+	if err != nil {
+		return "", "", 0, err
+	}
+
+	refreshRaw, err := utils.GenerateRandomString(32)
+	if err != nil {
+		return "", "", 0, err
+	}
+
+	hash := hashToken(refreshRaw)
+	expiresAt := now.Add(time.Duration(s.RefreshTokenExpireSeconds) * time.Second)
+	if err := s.RefreshTokenRepo.Create(user.ID, hash, expiresAt.Unix()); err != nil {
+		return "", "", 0, err
+	}
+
+	return accessToken, refreshRaw, s.AccessTokenExpireSeconds, nil
 }
 
-func (s *Login) GenerateToken(user *model.User) (string, int, error) {
-	ts := time.Now().UnixMilli()
-	nonce, err := utils.GenerateRandomString(32)
+func (s *Login) RefreshTokens(refreshRaw string) (string, string, int, error) {
+	hash := hashToken(refreshRaw)
+	rt, err := s.RefreshTokenRepo.FindByHash(hash)
 	if err != nil {
-		return "", 0, err
+		return "", "", 0, fmt.Errorf("refresh token: %w", err)
 	}
-	hash := s.generateTokenHash(user, ts, nonce)
-	username := utils.Base64URLEncode(user.Username)
-	return fmt.Sprintf("%s.%s.%d.%s", username, nonce, ts, hash), s.LoginExpireSeconds, nil
+	if rt.ID == 0 {
+		return "", "", 0, errInvalidRefreshToken
+	}
+	if time.Now().After(rt.ExpiresAt) {
+		s.RefreshTokenRepo.Delete(rt.ID)
+		return "", "", 0, errInvalidRefreshToken
+	}
+
+	s.RefreshTokenRepo.Delete(rt.ID)
+
+	user, err := s.UserRepo.GetByID(rt.UserID)
+	if err != nil {
+		return "", "", 0, err
+	}
+
+	return s.GenerateTokens(user)
 }
 
-func (s *Login) AuthToken(token string) (*model.User, bool, error) {
-	a := strings.Split(token, ".")
-	if len(a) != 4 {
-		return nil, false, invalidTokenErr
+func (s *Login) Logout(refreshRaw string) error {
+	hash := hashToken(refreshRaw)
+	rt, err := s.RefreshTokenRepo.FindByHash(hash)
+	if err != nil || rt.ID == 0 {
+		return nil
 	}
+	return s.RefreshTokenRepo.Delete(rt.ID)
+}
 
-	username, err := utils.Base64URLDecode(a[0])
+func (s *Login) RevokeAllUserTokens(userID int64) error {
+	return s.RefreshTokenRepo.DeleteAllByUserID(userID)
+}
+
+func (s *Login) ParseJWT(tokenStr string) (*jwtClaims, error) {
+	token, err := jwt.ParseWithClaims(tokenStr, &jwtClaims{}, func(t *jwt.Token) (any, error) {
+		if _, ok := t.Method.(*jwt.SigningMethodHMAC); !ok {
+			return nil, fmt.Errorf("unexpected signing method: %v", t.Header["alg"])
+		}
+		return []byte(s.JWTSecret), nil
+	})
 	if err != nil {
-		return nil, false, invalidTokenErr
+		return nil, err
 	}
-
-	nonce := a[1]
-
-	ts, err := strconv.Atoi(a[2])
-	if err != nil {
-		return nil, false, invalidTokenErr
+	claims, ok := token.Claims.(*jwtClaims)
+	if !ok || !token.Valid {
+		return nil, fmt.Errorf("invalid token")
 	}
+	return claims, nil
+}
 
-	hash := a[3]
-
-	now := time.Now().UnixMilli()
-	const maxSkew = int64(5 * time.Second / time.Millisecond)
-	if int64(ts)-now > maxSkew || now-int64(ts) > int64(s.LoginExpireSeconds)*1000 {
-		return nil, false, invalidTokenErr
+func (s *Login) generateJWT(user *model.User, now time.Time) (string, error) {
+	claims := jwtClaims{
+		RegisteredClaims: jwt.RegisteredClaims{
+			IssuedAt:  jwt.NewNumericDate(now),
+			ExpiresAt: jwt.NewNumericDate(now.Add(time.Duration(s.AccessTokenExpireSeconds) * time.Second)),
+		},
+		UserID:   user.ID,
+		Username: user.Username,
 	}
+	token := jwt.NewWithClaims(jwt.SigningMethodHS256, claims)
+	return token.SignedString([]byte(s.JWTSecret))
+}
 
-	user, err := s.UserRepo.GetByUsername(username)
-	if err != nil {
-		return nil, false, err
-	}
-
-	h := s.generateTokenHash(user, int64(ts), nonce)
-	if h != hash {
-		return nil, false, nil
-	}
-	return user, true, nil
+func hashToken(raw string) string {
+	b := sha256.Sum256([]byte(raw))
+	return hex.EncodeToString(b[:])
 }

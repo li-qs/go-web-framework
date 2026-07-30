@@ -5,6 +5,7 @@ go 1.25.4
 require (
 	github.com/go-playground/validator/v10 v10.30.3
 	github.com/go-sql-driver/mysql v1.9.3
+	github.com/golang-jwt/jwt/v5 v5.3.1
 	github.com/jmoiron/sqlx v1.4.0
 	github.com/labstack/echo/v5 v5.0.3
 	go.uber.org/zap v1.28.0
