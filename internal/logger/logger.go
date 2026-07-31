@@ -1,36 +1,48 @@
 package logger
 
 import (
-	"github.com/labstack/echo/v5"
-	"github.com/labstack/echo/v5/middleware"
 	"go.uber.org/zap"
 )
 
-var Logger *zap.Logger
+var l *zap.Logger
 
-func Init() error {
-	l, err := zap.NewProduction()
-	if err != nil {
-		return err
+// level: "debug"-development, others-production
+func Init(level string) error {
+	var err error
+
+	if level == "debug" {
+		l, err = zap.NewDevelopment()
+	} else {
+		l, err = zap.NewProduction()
 	}
-	Logger = l
-	return nil
+
+	return err
+}
+
+func GetLogger() *zap.Logger {
+	return l
 }
 
 func Sync() error {
-	return Logger.Sync()
+	return l.Sync()
 }
 
-func Middleware() echo.MiddlewareFunc {
-	return middleware.RequestLoggerWithConfig(middleware.RequestLoggerConfig{
-		LogURI:    true,
-		LogStatus: true,
-		LogValuesFunc: func(c *echo.Context, v middleware.RequestLoggerValues) error {
-			Logger.Info("request",
-				zap.String("uri", v.URI),
-				zap.Int("status", v.Status),
-			)
-			return nil
-		},
-	})
+func Debug(msg string, fields ...zap.Field) {
+	l.Debug(msg, fields...)
+}
+
+func Info(msg string, fields ...zap.Field) {
+	l.Info(msg, fields...)
+}
+
+func Warn(msg string, fields ...zap.Field) {
+	l.Warn(msg, fields...)
+}
+
+func Error(msg string, fields ...zap.Field) {
+	l.Error(msg, fields...)
+}
+
+func Fatal(msg string, fields ...zap.Field) {
+	l.Fatal(msg, fields...)
 }

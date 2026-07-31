@@ -2,8 +2,12 @@ package main
 
 import (
 	"context"
+	"flag"
+	"io"
+	"log/slog"
 	"myapi/internal/config"
 	"myapi/internal/logger"
+	myMiddleware "myapi/internal/middleware"
 	"myapi/internal/router"
 	"myapi/pkg/mysql"
 	"net/http"
@@ -15,6 +19,7 @@ import (
 	"github.com/go-playground/validator/v10"
 	"github.com/labstack/echo/v5"
 	"github.com/labstack/echo/v5/middleware"
+	"github.com/spf13/viper"
 	"go.uber.org/zap"
 )
 
@@ -30,30 +35,37 @@ func (v *Validator) Validate(i any) error {
 }
 
 func main() {
-	if err := logger.Init(); err != nil {
+	var configFile string
+	flag.StringVar(&configFile, "config", "./config.yaml", "config file path")
+	flag.Parse()
+
+	v := viper.New()
+	v.SetConfigFile(configFile)
+	if err := v.ReadInConfig(); err != nil {
+		panic(err.Error())
+	}
+
+	cfg, err := config.Load(v)
+	if err != nil {
+		panic(err.Error())
+	}
+
+	if err := logger.Init(cfg.Log.Level); err != nil {
 		panic(err)
 	}
-	defer logger.Logger.Sync()
-
-	configFile := "./config.yaml"
-	if len(os.Args) > 1 {
-		configFile = os.Args[1]
-	}
-	cfg, err := config.Load(configFile)
-	if err != nil {
-		logger.Logger.Fatal("load config failed", zap.Error(err))
-	}
+	defer logger.Sync()
 
 	db, err := mysql.Connect(cfg.Database.Main)
 	if err != nil {
-		logger.Logger.Fatal("init mysql failed", zap.Error(err))
+		logger.Fatal("init mysql failed", zap.Error(err))
 	}
 	defer db.Close()
 
 	e := echo.New()
+	e.Logger = slog.New(slog.NewJSONHandler(io.Discard, &slog.HandlerOptions{Level: slog.LevelWarn}))
 	e.Validator = &Validator{validator: validator.New()}
 
-	e.Use(logger.Middleware())
+	e.Use(myMiddleware.RequestLogger(logger.GetLogger()))
 	e.Use(middleware.Recover())
 	e.Use(middleware.CORSWithConfig(middleware.CORSConfig{
 		AllowOrigins:     cfg.Server.AllowOrigins,
@@ -75,8 +87,11 @@ func main() {
 	sc := echo.StartConfig{
 		Address:         cfg.Server.ListenAddr,
 		GracefulTimeout: 5 * time.Second,
+		HideBanner:      true,
 	}
+
+	logger.Info("server starting", zap.String("address", cfg.Server.ListenAddr))
 	if err := sc.Start(ctx, e); err != nil {
-		logger.Logger.Fatal("failed to start server", zap.Error(err))
+		logger.Fatal("failed to start server", zap.Error(err))
 	}
 }

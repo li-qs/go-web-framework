@@ -2,48 +2,45 @@ package config
 
 import (
 	"fmt"
-	"os"
 
-	"gopkg.in/yaml.v3"
+	"github.com/spf13/viper"
 )
 
 type Config struct {
-	Server   ServerConfig   `yaml:"server"`
-	Database DatabaseConfig `yaml:"database"`
-	Auth     AuthConfig     `yaml:"auth"`
+	Log      LogConfig      `mapstructure:"log"`
+	Server   ServerConfig   `mapstructure:"server"`
+	Database DatabaseConfig `mapstructure:"database"`
+	Auth     AuthConfig     `mapstructure:"auth"`
+}
+
+type LogConfig struct {
+	Level string `mapstructure:"level"`
 }
 
 type ServerConfig struct {
-	ListenAddr   string   `yaml:"listen_addr"`
-	AllowOrigins []string `yaml:"allow_origins"`
+	ListenAddr   string   `mapstructure:"listen_addr"`
+	AllowOrigins []string `mapstructure:"allow_origins"`
 }
 
 type DatabaseConfig struct {
-	Main string `yaml:"main"`
+	Main string `mapstructure:"main"`
 }
 
 type AuthConfig struct {
-	JWTSecret                string `yaml:"jwt_secret"`
-	AccessTokenExpireSeconds  int    `yaml:"access_token_expire_seconds"`
-	RefreshTokenExpireSeconds int    `yaml:"refresh_token_expire_seconds"`
+	JWTSecret                 string `mapstructure:"jwt_secret"`
+	AccessTokenExpireSeconds  int    `mapstructure:"access_token_expire_seconds"`
+	RefreshTokenExpireSeconds int    `mapstructure:"refresh_token_expire_seconds"`
 }
 
-func Load(path string) (*Config, error) {
-	b, err := os.ReadFile(path)
-	if err != nil {
-		return nil, fmt.Errorf("read config file: %w", err)
-	}
-
+func Load(v *viper.Viper) (*Config, error) {
 	var cfg Config
-	if err := yaml.Unmarshal(b, &cfg); err != nil {
-		return nil, fmt.Errorf("parse config file: %w", err)
+	if err := v.Unmarshal(&cfg); err != nil {
+		return nil, fmt.Errorf("unmarshal config: %w", err)
 	}
-
 	setDefaults(&cfg)
 	if err := cfg.Validate(); err != nil {
-		return nil, fmt.Errorf("validate config: %w", err)
+		return nil, err
 	}
-
 	return &cfg, nil
 }
 
