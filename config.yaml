@@ -1,16 +1,13 @@
-server:
-  listen_addr: :8080
-  allow_origins:
-    - http://localhost:3000
-    - http://127.0.0.1:3000
+server_addr: :8080
+log_level: info
 
-log:
-  level: info
+allow_origins:
+  - http://127.0.0.1:3000
 
-database:
-  main: admin:741741741@tcp(192.168.5.10:3306)/blog3?charset=utf8mb4&parseTime=True&loc=Asia%2FShanghai&timeout=5s
+mysql_dsn: root:123456@tcp(127.0.0.1:3306)/web_framework?charset=utf8mb4&parseTime=True&loc=Asia%2FShanghai&timeout=5s
 
-auth:
-  jwt_secret: "change-me-to-a-random-secret"
-  access_token_expire_seconds: 900
-  refresh_token_expire_seconds: 604800
+jwt_secret: "change-me-to-a-random-secret"
+token_salt: "change-me-to-a-random-salt"
+access_ttl: 900
+refresh_ttl: 604800
+cookie_secure: false

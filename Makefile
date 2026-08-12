@@ -1,15 +1,15 @@
-NAME      = myapi
+NAME      = myframework
 BUILD_DIR = $(CURDIR)/build
 
 .PHONY: all clean
-all: clean server
+all: clean api
 
 clean:
 	rm -rf $(BUILD_DIR)
 
-server: server-linux-amd64 server-darwin-amd64 server-darwin-arm64
+api: api-linux-amd64 api-darwin-amd64 api-darwin-arm64
 
-server-linux-amd64 server-darwin-amd64 server-darwin-arm64:
+api-linux-amd64 api-darwin-amd64 api-darwin-arm64:
 	@mkdir -p $(BUILD_DIR)
-	CGO_ENABLED=0 GOOS=$$(echo $@ | sed 's/^server-//;s/-.*//') GOARCH=$$(echo $@ | sed 's/^server-//;s/.*-//') \
-		go build -o $(BUILD_DIR)/$(NAME)-$@ ./cmd/server
+	CGO_ENABLED=0 GOOS=$$(echo $@ | sed 's/^api-//;s/-.*//') GOARCH=$$(echo $@ | sed 's/^api-//;s/.*-//') \
+		go build -o $(BUILD_DIR)/$(NAME)-$@ ./cmd/api
