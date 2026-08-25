@@ -25,6 +25,7 @@ func Run(ctx context.Context, listenAddr, logLevel string, register RegisterFunc
 	e := echo.New()
 	e.Logger = slog.New(slog.NewJSONHandler(io.Discard, &slog.HandlerOptions{Level: slog.LevelWarn}))
 	e.Validator = NewValidator()
+	e.JSONSerializer = &JSONSerializer{}
 
 	e.Use(middleware.Recover())
 	e.Use(myMiddleware.RequestLogger())
