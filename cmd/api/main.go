@@ -4,6 +4,7 @@ import (
 	"context"
 	"flag"
 	"log"
+	"log/slog"
 	"os"
 	"os/signal"
 	"syscall"
@@ -21,17 +22,35 @@ import (
 )
 
 func main() {
+	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
+	defer stop()
+
 	var configFile string
 	flag.StringVar(&configFile, "config", "./config.yaml", "config file path")
 	flag.Parse()
-
-	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
-	defer stop()
 
 	cfg, err := config.LoadFile(configFile)
 	if err != nil {
 		log.Fatalf("load config failed: %v", err)
 	}
+
+	var level slog.Level
+	if os.Getenv("ENV") == "development" {
+		level = slog.LevelDebug
+	} else {
+		level = slog.LevelInfo
+	}
+	s := server.New(
+		server.Address(cfg.ServerAddr),
+		server.LogLevel(level),
+		server.WithCORS(&middleware.CORSConfig{
+			AllowOrigins:     cfg.AllowOrigins,
+			AllowMethods:     []string{"GET", "POST", "PUT", "DELETE", "OPTIONS", "HEAD"},
+			AllowHeaders:     []string{"Content-Type", "Authorization", "Origin", "Accept", "X-Request-ID"},
+			AllowCredentials: true,
+			MaxAge:           86400,
+		}),
+	)
 
 	db, err := mysql.Connect(cfg.MySQLDSN)
 	if err != nil {
@@ -49,40 +68,30 @@ func main() {
 		RefreshTokenExpireSeconds: cfg.RefreshTTL,
 	})
 
-	register := func(e *echo.Echo) {
-		e.Use(middleware.CORSWithConfig(middleware.CORSConfig{
-			AllowOrigins:     cfg.AllowOrigins,
-			AllowMethods:     []string{"GET", "POST", "PUT", "DELETE", "OPTIONS", "HEAD"},
-			AllowHeaders:     []string{"Content-Type", "Authorization", "Origin", "Accept", "X-Request-ID"},
-			AllowCredentials: true,
-			MaxAge:           86400,
-		}))
+	healthHandler := health.NewHandler(db)
+	userHandler := user.NewHandler(userService, *cfg.CookieSecure)
 
-		healthHandler := health.NewHandler(db)
-		userHandler := user.NewHandler(userService, *cfg.CookieSecure)
+	noAuth := s.Router()
+	noAuth.GET("/health", healthHandler.Liveness)
+	noAuth.GET("/ready", healthHandler.Readiness)
 
-		noAuth := e.Group("")
-		noAuth.GET("/health", healthHandler.Liveness)
-		noAuth.GET("/ready", healthHandler.Readiness)
+	api := s.Router().Group("/api")
+	api.POST("/login", userHandler.Login, middleware.RateLimiterWithConfig(middleware.RateLimiterConfig{
+		Store: middleware.NewRateLimiterMemoryStore(10),
+		IdentifierExtractor: func(c *echo.Context) (string, error) {
+			return c.RealIP(), nil
+		},
+	}))
+	api.POST("/logout", userHandler.Logout)
+	api.POST("/refresh", userHandler.RefreshToken)
 
-		api := e.Group("/api")
-		api.POST("/login", userHandler.Login, middleware.RateLimiterWithConfig(middleware.RateLimiterConfig{
-			Store: middleware.NewRateLimiterMemoryStore(10),
-			IdentifierExtractor: func(c *echo.Context) (string, error) {
-				return c.RealIP(), nil
-			},
-		}))
-		api.POST("/logout", userHandler.Logout)
-		api.POST("/refresh", userHandler.RefreshToken)
+	authApi := s.Router().Group("/api")
+	authApi.Use(myMiddleware.Auth(cfg.JWTSecret))
 
-		authApi := e.Group("/api")
-		authApi.Use(myMiddleware.Auth(cfg.JWTSecret))
+	authApi.GET("/user", userHandler.UserInfo)
+	authApi.PUT("/user/password", userHandler.UpdatePassword)
 
-		authApi.GET("/user", userHandler.UserInfo)
-		authApi.PUT("/user/password", userHandler.UpdatePassword)
-	}
-
-	if err := server.Run(ctx, cfg.ServerAddr, cfg.LogLevel, register); err != nil {
+	if err := s.Start(ctx); err != nil {
 		log.Fatalf("server failed: %v", err)
 	}
 }

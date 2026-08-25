@@ -17,7 +17,6 @@ const (
 type Config struct {
 	ServerAddr   string   `yaml:"server_addr"`
 	AllowOrigins []string `yaml:"allow_origins"`
-	LogLevel     string   `yaml:"log_level"`
 	MySQLDSN     string   `yaml:"mysql_dsn"`
 	JWTSecret    string   `yaml:"jwt_secret"`
 	TokenSalt    string   `yaml:"token_salt"`

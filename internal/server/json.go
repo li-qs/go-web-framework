@@ -14,7 +14,7 @@ var jsonBufPool = sync.Pool{New: newJSONBuf}
 
 func newJSONBuf() any { return new(bytes.Buffer) }
 
-type JSONSerializer struct {}
+type JSONSerializer struct{}
 
 func (s *JSONSerializer) Serialize(c *echo.Context, target any, indent string) error {
 	enc := sonic.ConfigFastest.NewEncoder(c.Response())
@@ -27,7 +27,7 @@ func (s *JSONSerializer) Serialize(c *echo.Context, target any, indent string) e
 func (s *JSONSerializer) Deserialize(c *echo.Context, target any) error {
 	buf := jsonBufPool.Get().(*bytes.Buffer)
 	buf.Reset()
-	defer func ()  {
+	defer func() {
 		if buf.Cap() <= maxPooledJSONBuf {
 			jsonBufPool.Put(buf)
 		}

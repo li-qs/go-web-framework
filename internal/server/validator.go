@@ -9,10 +9,6 @@ type Validator struct {
 	validator *validator.Validate
 }
 
-func NewValidator() *Validator {
-	return &Validator{validator: validator.New()}
-}
-
 func (v *Validator) Validate(i any) error {
 	if err := v.validator.Struct(i); err != nil {
 		return echo.ErrBadRequest.Wrap(err)
