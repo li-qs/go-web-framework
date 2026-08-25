@@ -41,7 +41,7 @@ func Auth(jwtSecret string) echo.MiddlewareFunc {
 				return response.JsonError(c, 401, msgTokenExpired)
 			}
 
-			uid, _ := claims["uid"].(int64)
+			uid, _ := claims["uid"].(int)
 			username, _ := claims["username"].(string)
 			if uid == 0 || username == "" {
 				return response.JsonError(c, 401, msgTokenExpired)

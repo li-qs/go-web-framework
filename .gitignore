@@ -20,5 +20,6 @@ go.work.sum
 .vscode/
 
 build
-/server
 **/__debug_bin*
+
+migration/

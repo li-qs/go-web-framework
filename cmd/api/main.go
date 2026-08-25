@@ -9,13 +9,14 @@ import (
 	"os/signal"
 	"syscall"
 
+	"myframework/ent"
 	"myframework/internal/config"
 	"myframework/internal/domain/health"
 	"myframework/internal/domain/user"
-	"myframework/internal/infra/repo"
 	myMiddleware "myframework/internal/middleware"
 	"myframework/internal/server"
-	"myframework/pkg/mysql"
+
+	_ "github.com/go-sql-driver/mysql"
 
 	"github.com/labstack/echo/v5"
 	"github.com/labstack/echo/v5/middleware"
@@ -52,44 +53,39 @@ func main() {
 		}),
 	)
 
-	db, err := mysql.Connect(cfg.MySQLDSN)
+	client, err := ent.Open("mysql", cfg.MySQLDSN)
 	if err != nil {
-		log.Fatalf("connect mysql failed: %v", err)
+		log.Fatalf("failed opening connection to mysql: %v", err)
 	}
-	defer db.Close()
+	defer client.Close()
 
-	userRepo := repo.NewUserRepo(db)
-	tokenRepo := repo.NewTokenRepo(db, int32(cfg.RefreshTTL))
-
-	userService := user.NewService(userRepo, tokenRepo, &user.ServiceOptions{
-		JWTSecret:                 cfg.JWTSecret,
-		TokenSalt:                 cfg.TokenSalt,
-		AccessTokenExpireSeconds:  cfg.AccessTTL,
-		RefreshTokenExpireSeconds: cfg.RefreshTTL,
-	})
-
-	healthHandler := health.NewHandler(db)
-	userHandler := user.NewHandler(userService, *cfg.CookieSecure)
-
+	healthHandler := health.New(client)
 	noAuth := s.Router()
-	noAuth.GET("/health", healthHandler.Liveness)
-	noAuth.GET("/ready", healthHandler.Readiness)
+	{
+		noAuth.GET("/health", healthHandler.Liveness)
+		noAuth.GET("/ready", healthHandler.Readiness)
+	}
 
+	userHandler := user.New(cfg, client)
 	api := s.Router().Group("/api")
-	api.POST("/login", userHandler.Login, middleware.RateLimiterWithConfig(middleware.RateLimiterConfig{
-		Store: middleware.NewRateLimiterMemoryStore(10),
-		IdentifierExtractor: func(c *echo.Context) (string, error) {
-			return c.RealIP(), nil
-		},
-	}))
-	api.POST("/logout", userHandler.Logout)
-	api.POST("/refresh", userHandler.RefreshToken)
+	{
+		api.POST("/login", userHandler.Login, middleware.RateLimiterWithConfig(middleware.RateLimiterConfig{
+			Store: middleware.NewRateLimiterMemoryStore(10),
+			IdentifierExtractor: func(c *echo.Context) (string, error) {
+				return c.RealIP(), nil
+			},
+		}))
+		api.POST("/logout", userHandler.Logout)
+		api.POST("/refresh", userHandler.RefreshToken)
+	}
 
 	authApi := s.Router().Group("/api")
-	authApi.Use(myMiddleware.Auth(cfg.JWTSecret))
+	{
+		authApi.Use(myMiddleware.Auth(cfg.JWTSecret))
 
-	authApi.GET("/user", userHandler.UserInfo)
-	authApi.PUT("/user/password", userHandler.UpdatePassword)
+		authApi.GET("/user", userHandler.UserInfo)
+		authApi.PUT("/user/password", userHandler.UpdatePassword)
+	}
 
 	if err := s.Start(ctx); err != nil {
 		log.Fatalf("server failed: %v", err)

@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"myframework/ent"
 	"myframework/pkg/utils"
 	"time"
 
@@ -13,8 +14,8 @@ import (
 )
 
 type Service struct {
-	userRepo  UserRepoImpl
-	tokenRepo TokenRepoImpl
+	userRepo  UserRepo
+	tokenRepo TokenRepo
 	options   *ServiceOptions
 }
 
@@ -27,19 +28,11 @@ type ServiceOptions struct {
 
 type jwtClaims struct {
 	jwt.RegisteredClaims
-	UserID   int64  `json:"uid"`
+	UserID   int    `json:"uid"`
 	Username string `json:"username"`
 }
 
-func NewService(userRepo UserRepoImpl, tokenRepo TokenRepoImpl, opts *ServiceOptions) *Service {
-	return &Service{
-		userRepo:  userRepo,
-		tokenRepo: tokenRepo,
-		options:   opts,
-	}
-}
-
-func (s *Service) AuthUser(ctx context.Context, username, password string) (*UserEntity, error) {
+func (s *Service) AuthUser(ctx context.Context, username, password string) (*ent.User, error) {
 	user, err := s.userRepo.GetByUsername(ctx, username)
 	if err != nil {
 		if errors.Is(err, mongo.ErrNoDocuments) {
@@ -54,7 +47,7 @@ func (s *Service) AuthUser(ctx context.Context, username, password string) (*Use
 	return user, nil
 }
 
-func (s *Service) GenerateTokens(ctx context.Context, user *UserEntity) (string, string, int, error) {
+func (s *Service) GenerateTokens(ctx context.Context, user *ent.User) (string, string, int, error) {
 	now := time.Now()
 	accessToken, err := s.generateJWT(user, now)
 	if err != nil {
@@ -113,11 +106,11 @@ func (s *Service) Logout(ctx context.Context, refreshRaw string) error {
 	return s.tokenRepo.Delete(ctx, rt.ID)
 }
 
-func (s *Service) RevokeAllUserTokens(ctx context.Context, userID int64) error {
+func (s *Service) RevokeAllUserTokens(ctx context.Context, userID int) error {
 	return s.tokenRepo.DeleteByUserID(ctx, userID)
 }
 
-func (s *Service) generateJWT(user *UserEntity, now time.Time) (string, error) {
+func (s *Service) generateJWT(user *ent.User, now time.Time) (string, error) {
 	claims := jwtClaims{
 		RegisteredClaims: jwt.RegisteredClaims{
 			IssuedAt:  jwt.NewNumericDate(now),
@@ -134,15 +127,7 @@ func (s *Service) hashRefreshToken(raw string) string {
 	return utils.HMACSHA256Hex(s.options.TokenSalt, raw)
 }
 
-func (s *Service) GetByID(ctx context.Context, userID int64) (*UserEntity, error) {
-	return s.userRepo.GetByID(ctx, userID)
-}
-
-func (s *Service) GetByUsername(ctx context.Context, username string) (*UserEntity, error) {
-	return s.userRepo.GetByUsername(ctx, username)
-}
-
-func (s *Service) UpdatePassword(ctx context.Context, userID int64, pwd string) error {
+func (s *Service) UpdatePassword(ctx context.Context, userID int, pwd string) error {
 	pwdHash, err := bcrypt.GenerateFromPassword([]byte(pwd), 12)
 	if err != nil {
 		return err

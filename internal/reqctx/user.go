@@ -7,7 +7,7 @@ import (
 )
 
 type UserCtx struct {
-	ID           int64
+	ID           int
 	Username     string
 	PasswordHash string
 	CreatedAt    time.Time

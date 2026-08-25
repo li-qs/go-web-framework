@@ -17,10 +17,6 @@ type Handler struct {
 	cookieSecure bool
 }
 
-func NewHandler(srv *Service, cookieSecure bool) *Handler {
-	return &Handler{srv: srv, cookieSecure: cookieSecure}
-}
-
 type LoginRequest struct {
 	Username string `json:"username" validate:"required"`
 	Password string `json:"password" validate:"required"`
@@ -117,7 +113,7 @@ func setRefreshCookie(c *echo.Context, value string, maxAge int, secure bool) {
 }
 
 type UserInfoResponse struct {
-	ID        int64  `json:"id"`
+	ID        int    `json:"id"`
 	Username  string `json:"username"`
 	CreatedAt int64  `json:"created_at"`
 	UpdatedAt int64  `json:"updated_at"`

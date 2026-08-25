@@ -2,7 +2,7 @@ package health
 
 import (
 	"context"
-	"myframework/pkg/mysql"
+	"myframework/ent"
 	"net/http"
 	"time"
 
@@ -10,10 +10,10 @@ import (
 )
 
 type Handler struct {
-	db *mysql.DB
+	db *ent.Client
 }
 
-func NewHandler(db *mysql.DB) *Handler {
+func New(db *ent.Client) *Handler {
 	return &Handler{db: db}
 }
 
@@ -25,7 +25,8 @@ func (h *Handler) Readiness(c *echo.Context) error {
 	ctx, cancel := context.WithTimeout(c.Request().Context(), 2*time.Second)
 	defer cancel()
 
-	if err := h.db.DB.PingContext(ctx); err != nil {
+	_, err := h.db.User.Query().Limit(1).All(ctx)
+	if err != nil {
 		return c.String(http.StatusServiceUnavailable, "unavailable")
 	}
 	return c.String(http.StatusOK, "OK")
