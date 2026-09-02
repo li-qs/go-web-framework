@@ -2,8 +2,6 @@ package server
 
 import (
 	"context"
-	"log/slog"
-	"os"
 	"time"
 
 	"github.com/go-playground/validator/v10"
@@ -13,7 +11,6 @@ import (
 
 var defaultServerConfig = ServerConfig{
 	Address:         ":8080",
-	LogLevel:        slog.LevelInfo,
 	GracefulTimeout: 5 * time.Second,
 }
 
@@ -25,7 +22,6 @@ type Server struct {
 
 type ServerConfig struct {
 	Address         string
-	LogLevel        slog.Level
 	CORSConfig      *middleware.CORSConfig
 	GracefulTimeout time.Duration
 }
@@ -35,12 +31,6 @@ type Option func(*ServerConfig)
 func Address(addr string) Option {
 	return func(c *ServerConfig) {
 		c.Address = addr
-	}
-}
-
-func LogLevel(level slog.Level) Option {
-	return func(c *ServerConfig) {
-		c.LogLevel = level
 	}
 }
 
@@ -67,16 +57,9 @@ func New(opts ...Option) *Server {
 		cfg.Address = defaultServerConfig.Address
 	}
 
-	if cfg.LogLevel == 0 {
-		cfg.LogLevel = defaultServerConfig.LogLevel
-	}
-
 	if cfg.GracefulTimeout == 0 {
 		cfg.GracefulTimeout = defaultServerConfig.GracefulTimeout
 	}
-
-	slogOpts := &slog.HandlerOptions{Level: cfg.LogLevel}
-	slog.SetDefault(slog.New(slog.NewJSONHandler(os.Stdout, slogOpts)))
 
 	e := echo.NewWithConfig(echo.Config{
 		JSONSerializer: &JSONSerializer{},

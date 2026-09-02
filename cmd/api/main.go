@@ -35,15 +35,16 @@ func main() {
 		log.Fatalf("load config failed: %v", err)
 	}
 
-	var level slog.Level
+	slogOpts := &slog.HandlerOptions{}
 	if os.Getenv("ENV") == "development" {
-		level = slog.LevelDebug
+		slogOpts.Level = slog.LevelDebug
 	} else {
-		level = slog.LevelInfo
+		slogOpts.Level = slog.LevelInfo
 	}
+	slog.SetDefault(slog.New(slog.NewJSONHandler(os.Stdout, slogOpts)))
+
 	s := server.New(
 		server.Address(cfg.ServerAddr),
-		server.LogLevel(level),
 		server.WithCORS(&middleware.CORSConfig{
 			AllowOrigins:     cfg.AllowOrigins,
 			AllowMethods:     []string{"GET", "POST", "PUT", "DELETE", "OPTIONS", "HEAD"},
