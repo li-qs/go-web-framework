@@ -9,7 +9,6 @@ import (
 	"time"
 
 	"github.com/golang-jwt/jwt/v5"
-	"go.mongodb.org/mongo-driver/v2/mongo"
 	"golang.org/x/crypto/bcrypt"
 )
 
@@ -35,9 +34,6 @@ type jwtClaims struct {
 func (s *Service) AuthUser(ctx context.Context, username, password string) (*ent.User, error) {
 	user, err := s.userRepo.GetByUsername(ctx, username)
 	if err != nil {
-		if errors.Is(err, mongo.ErrNoDocuments) {
-			return nil, ErrInvalidCredentials
-		}
 		return nil, err
 	}
 	err = bcrypt.CompareHashAndPassword([]byte(user.PasswordHash), []byte(password))
@@ -72,9 +68,6 @@ func (s *Service) RefreshTokens(ctx context.Context, refreshRaw string) (string,
 	tokenHash := s.hashRefreshToken(refreshRaw)
 	rt, err := s.tokenRepo.GetByToken(ctx, tokenHash)
 	if err != nil {
-		if errors.Is(err, mongo.ErrNoDocuments) {
-			return "", "", 0, ErrInvalidRefreshToken
-		}
 		return "", "", 0, fmt.Errorf("find refresh token: %w", err)
 	}
 	if time.Now().After(rt.ExpiresAt) {
