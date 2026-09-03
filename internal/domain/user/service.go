@@ -2,7 +2,6 @@ package user
 
 import (
 	"context"
-	"errors"
 	"fmt"
 	"myframework/ent"
 	"myframework/pkg/utils"
