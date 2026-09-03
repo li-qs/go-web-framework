@@ -18,7 +18,7 @@ type ListData[T any] struct {
 	Page     int `json:"page"`
 	PageSize int `json:"page_size"`
 	Total    int `json:"total"`
-	List     T   `json:"list"`
+	List     []T `json:"list"`
 }
 
 func JsonData[T any](c *echo.Context, data T) error {
@@ -28,7 +28,7 @@ func JsonData[T any](c *echo.Context, data T) error {
 	})
 }
 
-func JsonList[T any](c *echo.Context, list T, page int, pageSize int, total int) error {
+func JsonList[T any](c *echo.Context, list []T, page int, pageSize int, total int) error {
 	return c.JSON(http.StatusOK, &Response[ListData[T]]{
 		Code: CodeOK,
 		Data: ListData[T]{
